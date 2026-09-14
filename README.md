@@ -1,0 +1,2 @@
+# FX-Settlement-Platform
+Technical documentation covering the end-to-end foreign exchange (FX) transaction flow in a banking system — from order entry at the branch counter, branch-level approval control, and exchange rate calculation, through to accounting entries and reconciliation with the downstream core banking system. It goes deep into real-world enterprise integration patterns: batch file processing (HULFT), interbank messaging (SWIFT), and the design principles behind financial systems (rollback, idempotency, reconciliation).
