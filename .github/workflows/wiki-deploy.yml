@@ -1,0 +1,44 @@
+name: Deploy FX Banking Wiki to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'wiki/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    name: Build and deploy Docusaurus
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: wiki/package-lock.json
+
+      - name: Install dependencies
+        run: cd wiki && npm ci
+
+      - name: Sync i18n translations (docs/de, docs/vi -> wiki/i18n)
+        run: cd wiki && npm run i18n:sync
+
+      - name: Build
+        run: cd wiki && npm run build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./wiki/build
+          keep_files: false

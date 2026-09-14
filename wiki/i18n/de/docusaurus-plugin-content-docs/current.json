@@ -1,0 +1,34 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.wikiSidebar.category.Overview": {
+    "message": "Overview",
+    "description": "The label for category 'Overview' in sidebar 'wikiSidebar'"
+  },
+  "sidebar.wikiSidebar.category.Input Layer": {
+    "message": "Input Layer",
+    "description": "The label for category 'Input Layer' in sidebar 'wikiSidebar'"
+  },
+  "sidebar.wikiSidebar.category.Front & Branch": {
+    "message": "Front & Branch",
+    "description": "The label for category 'Front & Branch' in sidebar 'wikiSidebar'"
+  },
+  "sidebar.wikiSidebar.category.Exchange & Accounting": {
+    "message": "Exchange & Accounting",
+    "description": "The label for category 'Exchange & Accounting' in sidebar 'wikiSidebar'"
+  },
+  "sidebar.wikiSidebar.category.Messaging & Sync": {
+    "message": "Messaging & Sync",
+    "description": "The label for category 'Messaging & Sync' in sidebar 'wikiSidebar'"
+  },
+  "sidebar.wikiSidebar.category.Foundations": {
+    "message": "Foundations",
+    "description": "The label for category 'Foundations' in sidebar 'wikiSidebar'"
+  },
+  "sidebar.wikiSidebar.category.Reference": {
+    "message": "Reference",
+    "description": "The label for category 'Reference' in sidebar 'wikiSidebar'"
+  }
+}
