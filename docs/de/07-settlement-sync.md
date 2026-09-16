@@ -4,25 +4,25 @@ title: FX Settlement Synchronization
 sidebar_position: 8
 ---
 
-## FX Settlement Synchronization — đồng bộ dữ liệu thanh toán
+## FX Settlement Synchronization — settlement data sync
 
-### Mục tiêu
+### Objective
 
-Đồng bộ giao dịch giữa hệ thống nội bộ (FX System) và CBS để hai bên có cùng dữ liệu và trạng thái cuối cùng.
+Synchronize transactions between the internal system (FX System) and CBS so both sides end up with the same data and final status.
 
-### Quy trình chính
+### Main process
 
 ```text
-1. Nhân viên nhập 10 giao dịch → tính rate, exemption → status = READY_TO_SETTLE
-2. Kanryo (thủ công hoặc job tự động) → gom batch → gọi API CBS (OMT)
-3. Nhận response: Tanpyo (chi tiết record) + Denpyo (chứng từ tổng batch)
+1. Staff enter 10 transactions → calculate rate, exemption → status = READY_TO_SETTLE
+2. Kanryo (manual or automated job) → batch them up → call the CBS API (OMT)
+3. Receive response: Tanpyo (per-record detail) + Denpyo (batch-level voucher)
    → fx_transaction.status = BANK_SUCCESS, bank_ref_no = denpyoNo
-4. Bank Sync job (định kỳ vài phút/lần): GET /cbs/omt/result?date=...
-   → so sánh với DB nội bộ → update SETTLED / FAILED / PENDING
-5. Ack: build file phản hồi binary 1400-byte, gửi ngược Mainframe/hệ thống mẹ qua SFTP
+4. Bank Sync job (every few minutes): GET /cbs/omt/result?date=...
+   → compare against the internal DB → update SETTLED / FAILED / PENDING
+5. Ack: build a 1400-byte binary response file, send it back to the Mainframe/parent system via SFTP
 ```
 
-### Gọi API CBS (OMT Transaction)
+### Calling the CBS API (OMT Transaction)
 
 ```java
 HttpHeaders headers = new HttpHeaders();
@@ -41,10 +41,10 @@ Response:
 </response>
 ```
 
-### Job đồng bộ tự động (polling)
+### Automatic sync job (polling)
 
 ```java
-@Scheduled(cron = "0 */15 * * * *") // mỗi 15 phút
+@Scheduled(cron = "0 */15 * * * *") // every 15 minutes
 public void syncBankResultJob() {
     List<FxTransaction> pending = fxDao.findPending();
     for (FxTransaction txn : pending) {
@@ -54,9 +54,9 @@ public void syncBankResultJob() {
 }
 ```
 
-> Đây là mô hình **async/eventual consistency**: gọi API xong chưa chắc đã có kết quả cuối cùng ngay, cần job poll lại định kỳ để đối chiếu trạng thái thật — khác với giả định "gọi API rồi nhận response ngay là xong" ở các phần trước.
+> This is an **async/eventual consistency** model: after calling the API, the final result isn't necessarily available yet — a job needs to poll periodically to reconcile the real status — different from the "call the API and get a response, done" assumption used in earlier sections.
 
-### Tạo file Ack (Acknowledgement) gửi ngược Mainframe
+### Generating the Ack (Acknowledgement) file sent back to the Mainframe
 
 ```java
 FileOutputStream out = new FileOutputStream("ACK_20251030.DAT");
@@ -73,38 +73,38 @@ put ACK_20251030.DAT /outbox/
 EOF
 ```
 
-> Đây là bước output riêng biệt sau đối soát — không đồng nhất với bước "output batch → HULFT → external system" chung ở mục 1; đây cụ thể là gửi ngược lên **hệ thống mẹ / Mainframe** (ví dụ nhà cung cấp core-banking tương ứng).
+> This is a separate output step after reconciliation — not the same as the general "output batch → HULFT → external system" step from the System Overview chapter; this specifically sends data back up to the **parent system / Mainframe** (e.g. the corresponding core-banking vendor).
 
-### Reconciliation cuối ngày (khác BankSyncJob)
+### End-of-day reconciliation (different from BankSyncJob)
 
-Job chạy **1 lần/ngày** (khác với BankSyncJob chạy mỗi 15 phút):
-1. So sánh giao dịch SETTLED nội bộ với danh sách ngân hàng.
-2. Lệch (amount/currency/rate/status) → ghi log vào `FX_RECONCILE_RESULT`.
-3. Gửi report qua email hoặc PDF (wkhtmltopdf).
+A job that runs **once a day** (unlike BankSyncJob, which runs every 15 minutes):
+1. Compares internally SETTLED transactions against the bank's list.
+2. Discrepancies (amount/currency/rate/status) → logged to `FX_RECONCILE_RESULT`.
+3. Sends a report via email or PDF (wkhtmltopdf).
 
-### Status flow (ví dụ minh họa riêng cho luồng này)
+### Status flow (illustrative example specific to this flow)
 
-| Trạng thái | Ý nghĩa |
+| Status | Meaning |
 |---|---|
-| 00 | Tạo mới |
-| 10 | Đã nhập đủ dữ liệu |
-| 20 | Chờ hoàn tất (Ready to Settle) |
-| 30 | Đã gửi ngân hàng |
-| 40 | Thành công (Bank Success) |
-| 41 | Lỗi (Bank Fail) |
-| 50 | Đã đồng bộ và xác nhận (Settled) |
-| 90 | Đã phản hồi mainframe (Ack Sent) |
+| 00 | Newly created |
+| 10 | Data entry complete |
+| 20 | Awaiting completion (Ready to Settle) |
+| 30 | Sent to bank |
+| 40 | Success (Bank Success) |
+| 41 | Error (Bank Fail) |
+| 50 | Synced and confirmed (Settled) |
+| 90 | Mainframe acknowledged (Ack Sent) |
 
-> Đây là bộ status thứ 3 xuất hiện trong tài liệu (khác với 10/12/20/25/30 ở mục 5 và NEW/COMPLETED ở mục 3) — nhấn mạnh lại: **số hiệu cụ thể tùy hệ thống**, điều quan trọng là hiểu tư duy status-driven workflow.
+> This is the 3rd status set to appear in this documentation (different from 10/12/20/25/30 in the Tenpo chapter and NEW/COMPLETED in the Overview chapter) — reiterating: **the exact codes are system-specific**, what matters is understanding status-driven workflow thinking.
 
-### Mục tiêu tổng thể
+### Overall goals
 
-| Mục tiêu | Kết quả mong muốn |
+| Goal | Desired outcome |
 |---|---|
-| Đảm bảo giao dịch nội bộ thực hiện thật tại ngân hàng | Tránh sai lệch front vs CBS |
-| Tự động hóa thay vì phụ thuộc người dùng nhấn nút | Giảm lỗi thao tác |
-| Log và report để kiểm toán | Truy vết được từng giao dịch |
-| Phản hồi trạng thái về hệ thống mẹ | Nhất quán toàn tổ chức |
+| Ensure internal transactions are actually executed at the bank | Avoid mismatches between front-end and CBS |
+| Automate instead of relying on users clicking a button | Reduce operator error |
+| Log and report for auditing | Full traceability per transaction |
+| Report status back to the parent system | Organization-wide consistency |
 
 ---
 

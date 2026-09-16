@@ -1,12 +1,12 @@
 ---
 id: design-principles
-title: Nguyên tắc nền tảng — Rollback, Idempotency, Reconciliation
+title: Design Principles — Rollback, Idempotency, Reconciliation
 sidebar_position: 9
 ---
 
-## Rollback, Idempotency, Reconciliation (nguyên tắc nền tảng)
+## Rollback, Idempotency, Reconciliation (foundational principles)
 
-### Rollback không hoàn hảo
+### Rollback is not perfect
 
 ```java
 connection.setAutoCommit(false);
@@ -19,16 +19,16 @@ try {
 }
 ```
 
-**Nuance quan trọng:** DB rollback **không** rollback được transaction đã thành công ở hệ thống bên ngoài (CBS). Ví dụ: DB update → CBS SUCCESS → network timeout → app nghĩ FAIL → rollback DB, nhưng CBS đã xử lý tiền rồi. Do đó cần: Transaction ID, idempotency, status, retry, audit log, reconciliation.
+**Important nuance:** a DB rollback **cannot** roll back a transaction that already succeeded on an external system (CBS). Example: DB update → CBS SUCCESS → network timeout → the app thinks it FAILed → rolls back the DB, but CBS has already processed the money. Hence the need for: Transaction ID, idempotency, status, retry, audit log, reconciliation.
 
 ### Idempotency
 
 ```text
 Transaction ID = FX202609030001
-Lần đầu: BizForex → CBS → SUCCESS (nhưng response timeout)
+First attempt: BizForex → CBS → SUCCESS (but response timed out)
 Job retry: BizForex → CBS
-Không có idempotency: ❌ có thể xử lý 2 lần
-Có idempotency: CBS kiểm tra Transaction ID đã xử lý → return previous result ✅
+Without idempotency: ❌ could be processed twice
+With idempotency: CBS checks the Transaction ID has already been processed → returns the previous result ✅
 ```
 
 ### Reconciliation
@@ -44,12 +44,12 @@ Mismatch → ERROR / RETRY / MANUAL REVIEW.
 ---
 
 
-## Design principle xuyên suốt (đáng nhớ nhất)
+## The single design principle running through everything (most worth remembering)
 
-> **Không hardcode cấu trúc dữ liệu trong code — cấu hình trong DB.**
+> **Don't hardcode data structure in code — configure it in the DB.**
 
-Áp dụng nhất quán ở 2 chiều:
-- **Input (đọc file HULFT vào):** layout byte-offset lưu trong bảng `FILE_LAYOUT`, parser đọc động.
-- **Output (build XML gửi CBS):** template field-mapping lưu trong DB theo `transactionCode`, builder đọc động.
+Applied consistently in both directions:
+- **Input (reading HULFT files in):** byte-offset layout stored in the `FILE_LAYOUT` table, parser reads it dynamically.
+- **Output (building outbound XML for CBS):** field-mapping template stored in the DB by `transactionCode`, builder reads it dynamically.
 
-Khi format thay đổi (thêm field, đổi vị trí, thêm loại giao dịch mới), chỉ cần cập nhật cấu hình DB — không cần sửa/deploy lại code. Đây là nguyên tắc thiết kế đáng nói nhất khi phỏng vấn về khả năng maintain hệ thống lâu dài.
+When the format changes (add a field, move a position, add a new transaction type), only the DB config needs updating — no code changes/redeployment needed. This is the single most worthwhile design principle to bring up in an interview about long-term system maintainability.

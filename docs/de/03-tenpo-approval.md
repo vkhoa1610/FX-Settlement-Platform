@@ -4,67 +4,67 @@ title: Tenpo — Branch Control, Kanryo & JobNet
 sidebar_position: 4
 ---
 
-## Tenpo (店舗) — Lớp kiểm soát tại chi nhánh
+## Tenpo (店舗) — the branch control layer
 
-### Bối cảnh lịch sử
+### Historical background
 
-`店舗 (Tenpo)` nghĩa đen = chi nhánh/quầy giao dịch vật lý. Trước đây (kiến trúc gốc/đơn giản) hệ thống chỉ có 2 tầng:
+`店舗 (Tenpo)` literally means branch/physical transaction counter. Previously (original/simpler architecture), the system only had 2 tiers:
 
 ```text
 WebShokin → BizForex
 ```
 
-**Vấn đề của luồng cũ:** không có bước xác nhận ở chi nhánh; teller có thể nhập sai tỷ giá hoặc thông tin khách hàng không hợp lệ; BizForex (back office) nhận dữ liệu lỗi phải rollback hoặc xử lý thủ công.
+**Problem with the old flow:** there was no confirmation step at the branch; a teller could enter the wrong rate or invalid customer information; BizForex (back office) receiving bad data had to roll back or handle it manually.
 
-Sau này (khoảng 2015–2020, theo mô hình `業務分掌` — phân tách trách nhiệm nghiệp vụ Nhật), ngân hàng bổ sung Tenpo làm tầng trung gian:
+Later (around 2015–2020, following the `業務分掌` model — Japanese business-responsibility segregation), the bank added Tenpo as an intermediate tier:
 
 ```text
 WebShokin → Tenpo → BizForex
 ```
 
-### Bảng 3 tầng vai trò
+### Three-tier role table
 
-| Channel | Người sử dụng | Môi trường | Chức năng chính |
+| Channel | User | Environment | Main function |
 |---|---|---|---|
-| WebShokin | Teller | Web/Intranet | Nhập lệnh, gửi yêu cầu |
-| Tenpo | Branch Manager | Local LAN/Terminal | Xác nhận, phê duyệt, điều chỉnh |
-| BizForex | Accountant/kế toán | HQ/Data Center | Ghi sổ kế toán, tính rate |
+| WebShokin | Teller | Web/Intranet | Order entry, submit requests |
+| Tenpo | Branch Manager | Local LAN/Terminal | Confirm, approve, adjust |
+| BizForex | Accountant | HQ/Data Center | Post accounting entries, calculate rate |
 
-### Quy trình chi tiết
+### Detailed process
 
 ```text
-Step 1 — WebShokin: Teller nhập giao dịch → status = 10 (tạm nhập)
-Step 2 — Tenpo: kiểm tra KH, loại tiền, tỷ giá, KYC/AML
-         → OK: 承認 (Approve) → status = 20 → gửi BizForex
-         → NG: 差戻し (Reject) → trả về WebShokin
-Step 3 — BizForex: nhận record đã approved → gọi API CBS
-         → ghi sổ (denpyo/tanpyo) → status = 30 (Completed)
+Step 1 — WebShokin: Teller enters transaction → status = 10 (draft)
+Step 2 — Tenpo: checks customer, currency, rate, KYC/AML
+         → OK: 承認 (Approve) → status = 20 → send to BizForex
+         → NG: 差戻し (Reject) → sent back to WebShokin
+Step 3 — BizForex: receives the approved record → calls the CBS API
+         → posts entries (denpyo/tanpyo) → status = 30 (Completed)
 ```
 
-### Status theo channel (ví dụ)
+### Status by channel (example)
 
-| Status Code | Channel | Ý nghĩa |
+| Status Code | Channel | Meaning |
 |---|---|---|
-| 10 | WebShokin | Teller nhập lệnh, chờ xác nhận |
-| 15 | WebShokin | Đã gửi sang Tenpo |
-| 20 | Tenpo | Đã kiểm tra, phê duyệt |
-| 25 | Tenpo | Gửi sang BizForex |
-| 30 | BizForex | Đã ghi sổ kế toán thành công |
-| 40 | BizForex | Sinh report hoàn tất |
+| 10 | WebShokin | Teller entered order, awaiting confirmation |
+| 15 | WebShokin | Sent to Tenpo |
+| 20 | Tenpo | Checked, approved |
+| 25 | Tenpo | Sent to BizForex |
+| 30 | BizForex | Accounting entry posted successfully |
+| 40 | BizForex | Report generation complete |
 
-### Bảy vai trò nghiệp vụ chính của Tenpo
+### Tenpo's seven core business roles
 
-| Vai trò | Mô tả |
+| Role | Description |
 |---|---|
-| Validation | Kiểm tra KH, loại tiền, quốc gia, reason code |
-| Approval | Duyệt giao dịch thay mặt Branch Manager |
-| Adjustment | Chỉnh lại rate/amount trước khi gửi BizForex nếu cần |
-| AML/KYC control | Kiểm tra danh sách đen, giới hạn chuyển tiền, mục đích sử dụng |
-| Exception handling | Xử lý thủ công khi batch lỗi/file sai format |
-| Value Date confirmation | Xác nhận ngày hiệu lực trước khi ghi sổ |
-| Cầu nối BizForex | Chỉ gửi giao dịch "đã confirm" sang BizForex |
+| Validation | Check customer, currency, country, reason code |
+| Approval | Approve the transaction on behalf of the Branch Manager |
+| Adjustment | Adjust rate/amount before sending to BizForex if needed |
+| AML/KYC control | Check blacklists, remittance limits, purpose of use |
+| Exception handling | Manually handle batch errors/malformed files |
+| Value Date confirmation | Confirm the effective date before posting |
+| Bridge to BizForex | Only send "confirmed" transactions to BizForex |
 
-### Code minh họa
+### Illustrative code
 
 **DB schema:**
 ```sql
@@ -75,7 +75,7 @@ ALTER TABLE FX_TRANSACTION
   ADD COLUMN APPROVED_DATE TIMESTAMP;
 ```
 
-**Java phân role:**
+**Role branching in Java:**
 ```java
 if (role.equals("TELLER")) {
     transactionService.saveTransaction(request);
@@ -89,7 +89,7 @@ if (role.equals("TELLER")) {
 }
 ```
 
-**JSP ẩn/hiện nút theo channel:**
+**JSP button visibility by channel:**
 ```jsp
 <c:if test="${channel == 'WEBSHOKIN'}"><button>送金実行</button></c:if>
 <c:if test="${channel == 'TENPO'}">
@@ -102,53 +102,53 @@ if (role.equals("TELLER")) {
 </c:if>
 ```
 
-**Ví dụ log thực tế (timeline):**
+**Example real log (timeline):**
 ```text
 [09:15:12] WebShokin: Created TXN=FX20251030001 (rate=28000)
 [09:16:05] Tenpo: Approved TXN=FX20251030001 (rate=28000)
 [09:17:40] BizForex: Posted TXN=FX20251030001 (book_rate=27800, gain=2000000)
 ```
 
-### Lý do nghiệp vụ + compliance
+### Business rationale + compliance
 
-- Kiểm soát nội bộ tốt hơn, tránh teller gửi nhầm/vượt hạn mức.
-- Phân quyền rõ: nhập (Web) – duyệt (Tenpo) – hạch toán (Biz).
-- Tuân thủ **JFSA** (Financial Services Agency – Nhật Bản) về kiểm soát ngoại tệ.
-- Giảm lỗi kế toán vì BizForex chỉ nhận giao dịch đã duyệt.
+- Better internal control, prevents tellers from sending erroneous transactions or exceeding limits.
+- Clear separation of duties: entry (Web) – approval (Tenpo) – posting (Biz).
+- Compliance with **JFSA** (Financial Services Agency – Japan) foreign-exchange controls.
+- Reduces accounting errors since BizForex only receives approved transactions.
 
 ---
 
 
-## Kanryo (完了) — Chi tiết kỹ thuật và job tự động
+## Kanryo (完了) — technical details and the automated job
 
-### Ba pha của FX module
+### The three phases of the FX module
 
-| Giai đoạn | Tiếng Nhật | Mục đích | Ai thực hiện |
+| Phase | Japanese | Purpose | Who performs it |
 |---|---|---|---|
-| Nhập liệu | 入力 | Nhập record giao dịch (mua/bán, tỷ giá, số lượng, TTS, exemption) | Thu ngân/nhân viên FX |
-| Xử lý tạm thời | 一時処理 | Tính toán tạm: exemption rate, tổng tiền, status = 10 (in progress) | Hệ thống tự xử lý khi nhấn "Tính toán" |
-| Hoàn tất | 完了 (Kanryo) | Gửi lệnh thật tới OMT/CBS | User nhấn nút hoặc job chạy định kỳ |
+| Data entry | 入力 | Enter the transaction record (buy/sell, rate, amount, TTS, exemption) | Teller/FX staff |
+| Temporary processing | 一時処理 | Provisional calculation: exemption rate, total amount, status = 10 (in progress) | System auto-processes on "Calculate" |
+| Completion | 完了 (Kanryo) | Send the real order to OMT/CBS | User clicks the button, or a scheduled job |
 
-### Khi nhấn nút Kanryo
+### When the Kanryo button is clicked
 
 ```text
 POST /api/forex/completeTransaction
 ```
 
-> **Đã điều chỉnh:** bước này set `status = 15` (đã Kanryo, sẵn sàng xử lý) — **không gọi OMT ngay lập tức**. Việc gọi OMT/CBS thực sự diễn ra bất đồng bộ qua JobNet (xem mục 5D). Các bước 1-5 dưới đây mô tả logic validate + gọi OMT nói chung, được **JobNet** thực thi khi nhặt record status=15, không phải chạy ngay khi API completeTransaction được gọi.
+> **Corrected:** this step sets `status = 15` (Kanryo done, ready for processing) — **it does NOT call OMT immediately**. The actual OMT/CBS call happens asynchronously via JobNet (see the JobNet section below). Steps 1-5 below describe the validate + call-OMT logic in general, executed by **JobNet** when it picks up status=15 records — not run immediately when the completeTransaction API is called.
 
-1. Lấy danh sách giao dịch có status = 10 hoặc 15 tùy bước (xem mục 5D để biết chính xác thời điểm).
-2. Với mỗi giao dịch, validate:
-   - ✅ đủ dữ liệu (currency pair, rate, amount)
-   - ✅ chưa gửi tới OMT trước đó (tránh gửi trùng)
-   - ✅ role người dùng hợp lệ (manager)
-3. Sinh transaction message theo format OMT/CBS (Header: mã giao dịch, ngày giờ, user ID, branch code; Body: danh sách detail).
-4. Gọi OMT API (SOAP/XML hoặc REST/XML).
-5. Kết quả: thành công → status = 20 (completed); lỗi → status = RETRY (xem mục 5D.1, 12 để biết chi tiết flow retry).
+1. Fetch the list of transactions with status = 10 or 15 depending on the step (see the JobNet section for exact timing).
+2. For each transaction, validate:
+   - ✅ data completeness (currency pair, rate, amount)
+   - ✅ not already sent to OMT before (avoid duplicate sends)
+   - ✅ valid user role (manager)
+3. Generate the transaction message per the OMT/CBS format (Header: transaction code, date/time, user ID, branch code; Body: detail list).
+4. Call the OMT API (SOAP/XML or REST/XML).
+5. Result: success → status = 20 (completed); failure → status = RETRY (see the JobNet and FX Settlement Synchronization sections for retry flow details).
 
-### Job tự động nếu user không nhấn Kanryo
+### Automatic job if the user doesn't click Kanryo
 
-Batch/cshell job chạy định kỳ (ví dụ mỗi giờ, hoặc cố định `00:00, 06:00, 12:00`):
+Batch/cshell job running on a schedule (e.g. every hour, or fixed at `00:00, 06:00, 12:00`):
 
 ```bash
 0 * * * * /usr/local/bin/omt_forex_job.sh
@@ -158,98 +158,98 @@ Batch/cshell job chạy định kỳ (ví dụ mỗi giờ, hoặc cố định 
 curl -X POST http://localhost:8080/api/forex/autoComplete
 ```
 
-Service tìm record `status = 10 AND updated_time < now() - 30min`, lặp lại đúng logic validate → gọi OMT → update status → ghi log, giống hệt khi nhấn Kanryo thủ công.
+The service looks for records with `status = 10 AND updated_time < now() - 30min`, repeats the exact validate → call OMT → update status → log logic, same as manually clicking Kanryo.
 
-> **Phân biệt quan trọng:** job auto-complete này (tự động **gửi** giao dịch pending nếu user quên Kanryo) khác với BankSyncJob ở mục 12.4 (polling để **lấy kết quả** của giao dịch đã gửi trước đó). Hai job phục vụ hai mục đích khác nhau trong cùng vòng đời giao dịch.
+> **Important distinction:** this auto-complete job (automatically **sending** pending transactions if the user forgot to click Kanryo) is different from the BankSyncJob (polling to **fetch results** of transactions already sent — see the FX Settlement Synchronization chapter). Two jobs serving two different purposes in the same transaction lifecycle.
 
-### Response code cụ thể từ OMT
+### Specific OMT response codes
 
 ```text
-Mã kết quả: 0000 = OK, 9999 = lỗi
-OMT-Trx-No: số transaction OMT
-Trạng thái từng record: success / fail / skip
+Result code: 0000 = OK, 9999 = error
+OMT-Trx-No: OMT transaction number
+Per-record status: success / fail / skip
 ```
 
-### Cơ chế bảo vệ (bổ sung cho Idempotency ở mục 13.2)
+### Protection mechanism (in addition to Idempotency, see the Design Principles chapter)
 
-- **Lock record trước khi xử lý** — tránh double send (khác với việc chỉ kiểm tra Transaction ID ở phía CBS; đây là khóa ở tầng record trong hệ thống gửi).
-- Gắn `traceId` duy nhất cho mỗi transaction.
-- Log toàn bộ input/output của OMT vào bảng `omt_transaction_log`.
-- Cập nhật trạng thái bằng batch log file để đảm bảo audit.
+- **Lock the record before processing** — prevents double send (different from just checking the Transaction ID on the CBS side; this is a lock at the record level in the sending system).
+- Attach a unique `traceId` to every transaction.
+- Log the full OMT input/output to the `omt_transaction_log` table.
+- Update status via batch log file to ensure audit.
 
-### Lý do thiết kế song song "Kanryo + Job định kỳ"
+### Rationale for the parallel "Kanryo + scheduled job" design
 
-Đảm bảo giao dịch không bị bỏ sót nếu user quên thao tác; cho phép auto-closing cuối ngày; job cũng dùng để retry lỗi tạm thời (network, timeout).
+Ensures no transaction is missed if the user forgets to act; enables auto-closing at end of day; the job is also used to retry transient errors (network, timeout).
 
 ---
 
 
-## JobNet — Xử lý batch cho receipt đã Kanryo (status = 15)
+## JobNet — batch processing for receipts already Kanryo'd (status = 15)
 
-> Bổ sung/điều chỉnh quan trọng so với mục 5B.2: việc nhấn Kanryo trên màn hình **KHÔNG gọi OMT/CBS ngay lập tức (đồng bộ)**. Nhấn Kanryo chỉ set `status = 15` (đã hoàn tất nhập liệu, sẵn sàng xử lý). Việc gọi OMT/CBS thực sự diễn ra **bất đồng bộ**, thông qua 1 job chạy định kỳ gọi là **JobNet**.
+> An important addition/correction: clicking Kanryo on the screen does **NOT call OMT/CBS immediately (synchronously)**. Clicking Kanryo only sets `status = 15` (data entry complete, ready for processing). The actual OMT/CBS call happens **asynchronously**, via a scheduled job called **JobNet**.
 
-### Luồng tổng quan
+### Overall flow
 
 ```mermaid
 flowchart TD
-    A[JobNet chạy định kỳ] --> B["SQL: SELECT * FROM FX_TRANSACTION WHERE status = 15"]
+    A[JobNet runs on schedule] --> B["SQL: SELECT * FROM FX_TRANSACTION WHERE status = 15"]
     B --> C{"Currency == JPY ?"}
-    C -->|"TRUE (JPY)"| F["Flow tính OMT<br/>(JPY không cần tính lại rate)"]
-    C -->|"FALSE (ngoại tệ)"| D["So sánh TTS:<br/>TTS (table Exemption, đã chốt)<br/>vs<br/>TTS (flow khác, hiện hành)"]
-    D --> E{"Khớp hay Lệch?"}
-    E -->|Khớp| F
-    E -->|Lệch| G["JS khác:<br/>tính lại TTS + rate liên quan"]
+    C -->|"TRUE (JPY)"| F["OMT calculation flow<br/>(JPY doesn't need rate recalculation)"]
+    C -->|"FALSE (foreign currency)"| D["Compare TTS:<br/>TTS (Exemption table, locked)<br/>vs<br/>TTS (other flow, current)"]
+    D --> E{"Match or Mismatch?"}
+    E -->|Match| F
+    E -->|Mismatch| G["Other JS:<br/>recalculate TTS + related rate"]
     G --> F
-    F --> H["Call API OMT/CBS"]
-    H -->|Success| I["status = 20 completed<br/>(xử lý tiếp mục 5B.2 / 10.4)"]
-    H -->|Fail| J["status = RETRY<br/>hiển thị ở ViewCreator riêng"]
-    J -.->|"chi tiết retry xem mục 12"| K["FX Settlement Synchronization"]
+    F --> H["Call OMT/CBS API"]
+    H -->|Success| I["status = 20 completed<br/>(continues per the Kanryo/response sections)"]
+    H -->|Fail| J["status = RETRY<br/>shown in a dedicated ViewCreator"]
+    J -.->|"retry details in FX Settlement Synchronization"| K["FX Settlement Synchronization"]
 ```
 
-Diễn giải bằng chữ (tương đương sơ đồ trên):
+Textual equivalent of the diagram above:
 
 ```text
-JobNet chạy định kỳ → SELECT status = 15
+JobNet runs on schedule → SELECT status = 15
    → check Currency == JPY?
-        TRUE  → đi thẳng vào Flow tính OMT
-        FALSE → so sánh TTS (Exemption table vs flow khác)
-                  Khớp → đi thẳng vào Flow tính OMT
-                  Lệch → tính lại TTS/rate → rồi vào Flow tính OMT
-   → Call API OMT/CBS
+        TRUE  → go straight into the OMT calculation flow
+        FALSE → compare TTS (Exemption table vs other flow)
+                  Match    → go straight into the OMT calculation flow
+                  Mismatch → recalculate TTS/rate → then into the OMT calculation flow
+   → Call OMT/CBS API
         Success → status = 20 (completed)
-        Fail    → status = RETRY → ViewCreator riêng (xem mục 12)
+        Fail    → status = RETRY → dedicated ViewCreator (see FX Settlement Synchronization)
 ```
 
-### Điểm mấu chốt cần nhớ
+### Key points to remember
 
-- **JPY luôn đi thẳng** — không cần bước so sánh TTS, vì nội tệ không cần quy đổi tỷ giá.
-- **Ngoại tệ bắt buộc so sánh 2 nguồn TTS** trước khi gọi OMT:
-  - TTS đã lưu trong table Exemption (chốt tại thời điểm user nhập liệu/Kanryo).
-  - TTS lấy mới nhất từ 1 flow khác (rate hiện hành tại thời điểm JobNet chạy).
-  - Nếu **khớp** → rate còn hợp lệ, xử lý bình thường.
-  - Nếu **lệch** → rate đã đổi giữa lúc user nhập và lúc JobNet chạy → phải tính lại TTS/rate liên quan trước khi gọi OMT.
-- Bước so sánh này về bản chất chính là ứng dụng thực tế của khái niệm **Historical rate (chốt lúc giao dịch) vs Current rate (hiện hành)** đã nêu ở mục 9 — nhưng áp dụng ngay tại bước tiền xử lý trước khi gọi OMT, chứ không chỉ dùng cho revaluation cuối tháng.
+- **JPY always goes straight through** — no need for the TTS comparison step, since the local currency doesn't need rate conversion.
+- **Foreign currency must compare 2 TTS sources** before calling OMT:
+  - TTS stored in the Exemption table (locked at the time the user entered data/clicked Kanryo).
+  - TTS freshly fetched from another flow (the current rate at the time JobNet runs).
+  - If they **match** → the rate is still valid, process normally.
+  - If they **mismatch** → the rate changed between when the user entered it and when JobNet ran → the related TTS/rate must be recalculated before calling OMT.
+- This comparison step is, in essence, a real-world application of the **Historical rate (locked at transaction time) vs Current rate (prevailing)** concept covered in the BizForex chapter — but applied right at the pre-processing step before calling OMT, not only used for end-of-month revaluation.
 
 ### 排他制御 (Haita Seigyo) — Acquire/Release machine + transaction boundary
 
-> Khái niệm kỹ thuật chuẩn của mainframe/COBOL (không riêng CBS) — đã kiểm chứng qua tài liệu chính thức Hitachi và chuẩn COBOL2002. Đây là cơ chế bao quanh mỗi lần gọi transaction (ví dụ RQ20001) tới OMT/CBS.
+> A standard mainframe/COBOL technical concept (not specific to CBS) — verified against official Hitachi documentation and the COBOL2002 standard. This is the mechanism wrapping every transaction call (e.g. RQ20001) to OMT/CBS.
 
-**Cặp thuật ngữ chuẩn:** 獲得 (Kakutoku — Acquire) và 開放 (Kaihou — Release), thuộc cơ chế 排他制御 (Exclusive Control — kiểm soát truy cập độc quyền vào tài nguyên, ở đây là "machine"/terminal xử lý).
+**Standard term pair:** 獲得 (Kakutoku — Acquire) and 開放 (Kaihou — Release), part of the 排他制御 (Exclusive Control) mechanism — exclusive access control over a resource, here the processing "machine"/terminal.
 
 ```mermaid
 flowchart TD
-    A["排他制御 - 獲得 (Acquire)<br/>= BEGIN transaction<br/>+ lấy machine (GET hoặc POST)"] --> B{"Là machine POST<br/>và có RQ hợp lệ?"}
-    B -->|Có| C["LOCK machine<br/>(không cho instance khác dùng)"]
-    B -->|Không| D["Transaction xử lý<br/>(ví dụ: RQ20001)"]
+    A["排他制御 - 獲得 (Acquire)<br/>= BEGIN transaction<br/>+ acquire machine (GET or POST)"] --> B{"Is it a POST machine<br/>with a valid RQ?"}
+    B -->|Yes| C["LOCK the machine<br/>(prevent other instances from using it)"]
+    B -->|No| D["Process the transaction<br/>(e.g. RQ20001)"]
     C --> D
-    D --> E{"Kết quả?"}
-    E -->|Thành công| F["排他制御 - 開放 (Release)<br/>= COMMIT + giải phóng machine"]
-    E -->|Lỗi| G["排他制御 - 開放 (Release)<br/>= ROLLBACK toàn bộ + giải phóng machine"]
+    D --> E{"Result?"}
+    E -->|Success| F["排他制御 - 開放 (Release)<br/>= COMMIT + release the machine"]
+    E -->|Error| G["排他制御 - 開放 (Release)<br/>= full ROLLBACK + release the machine"]
 ```
 
-**Điểm mấu chốt:** **Commit nằm trong bước 開放 (Release)**, **Begin nằm trong bước 獲得 (Acquire)** — không tách rời thành các bước riêng biệt như trong mô hình transaction quen thuộc (BEGIN...COMMIT/ROLLBACK...). Dù thành công hay lỗi, machine đều được giải phóng ở cùng 1 điểm cuối (Release) — chỉ khác là đi kèm Commit hay Rollback bên trong bước đó.
+**Key point:** **Commit lives inside the 開放 (Release) step**, **Begin lives inside the 獲得 (Acquire) step** — they are not split into separate steps like the familiar transaction model (BEGIN...COMMIT/ROLLBACK...). Whether success or failure, the machine is always released at the same final point (Release) — the only difference is whether a Commit or a Rollback happens inside that step.
 
-> Đây là ứng dụng cụ thể của nguyên tắc rollback đã nêu ở mục 13.1 (transaction boundary, không undo được external call đã thành công) — nhưng ở tầng thấp hơn: quản lý vòng đời của chính "machine" (terminal/kết nối) dùng để gọi transaction, không chỉ quản lý dữ liệu DB.
+> This is a concrete application of the rollback principle covered in the Design Principles chapter (transaction boundary, cannot undo an external call that already succeeded) — but at a lower layer: managing the lifecycle of the "machine" (terminal/connection) itself used to call the transaction, not just managing DB data.
 
 ---
 

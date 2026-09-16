@@ -4,25 +4,25 @@ title: SWIFT vs HULFT — Messaging Layer
 sidebar_position: 7
 ---
 
-## SWIFT và HULFT
+## SWIFT and HULFT
 
-### SWIFT là gì?
+### What is SWIFT?
 
-**SWIFT** (Society for Worldwide Interbank Financial Telecommunication) — mạng lưới quốc tế truyền **thông điệp** tài chính giữa các ngân hàng. **SWIFT không chuyển tiền thật**, chỉ truyền message.
+**SWIFT** (Society for Worldwide Interbank Financial Telecommunication) — an international network for transmitting financial **messages** between banks. **SWIFT does not move real money**, it only transmits messages.
 
-Các loại message chính:
-- **MT103** – chuyển tiền khách hàng (Customer Transfer)
-- **MT202** – chuyển tiền ngân hàng (Bank Transfer)
-- **MT940** – sao kê tài khoản
-- **MX ISO20022** – dạng XML thay cho MT cũ
+Main message types:
+- **MT103** – customer transfer (Customer Transfer)
+- **MT202** – bank transfer (Bank Transfer)
+- **MT940** – account statement
+- **MX ISO20022** – XML format replacing the older MT format
 
-### HULFT là gì?
+### What is HULFT?
 
-**HULFT (ヒュルト)** — middleware truyền file an toàn, do **Saison Information Systems** phát triển, gần như chuẩn mặc định giữa các ngân hàng nội địa Nhật (tương tự FTP + checksum + retry logic).
+**HULFT (ヒュルト)** — a secure file-transfer middleware developed by **Saison Information Systems**, essentially the de facto standard among domestic Japanese banks (similar to FTP + checksum + retry logic).
 
-Đặc điểm: gửi file binary fixed-length (1400 byte/record), có header/footer checksum đảm bảo integrity, gửi định kỳ qua job cshell/batch (ví dụ mỗi 15 phút).
+Characteristics: sends fixed-length binary files (1400 bytes/record), has header/footer checksums to ensure integrity, sent periodically via a cshell/batch job (e.g. every 15 minutes).
 
-**Ví dụ file HULFT thật (có header/trailer):**
+**Example of a real HULFT file (with header/trailer):**
 ```text
 HDR0138FX20251030
 001YOKOHAMA BANK      28000JPYUSD00010000
@@ -30,26 +30,26 @@ HDR0138FX20251030
 TRL000000002
 ```
 
-### So sánh SWIFT vs HULFT
+### SWIFT vs HULFT comparison
 
-| Mục | SWIFT | HULFT |
+| Aspect | SWIFT | HULFT |
 |---|---|---|
-| Mục đích | Trao đổi message tài chính giữa ngân hàng quốc tế | Truyền file nội bộ giữa các hệ thống/ngân hàng Nhật |
-| Phạm vi | Quốc tế (interbank) | Nội địa (domestic) |
-| Dữ liệu | Message (MT/MX format) | File (fixed-length, XML) |
-| Thời điểm | Real-time/near real-time | Batch định kỳ |
-| Giao thức | SWIFTNet, ISO20022 | TCP/IP, HULFT protocol |
-| Ví dụ | Ngân hàng ABC ↔ Ngân hàng XYZ (quốc tế) | WebShokin ↔ BizForex ↔ CBS |
+| Purpose | Exchange financial messages between international banks | Transfer files internally between Japanese systems/banks |
+| Scope | International (interbank) | Domestic |
+| Data | Message (MT/MX format) | File (fixed-length, XML) |
+| Timing | Real-time/near real-time | Scheduled batch |
+| Protocol | SWIFTNet, ISO20022 | TCP/IP, HULFT protocol |
+| Example | Bank ABC ↔ Bank XYZ (international) | WebShokin ↔ BizForex ↔ CBS |
 
-### Vị trí trong toàn flow
+### Position in the overall flow
 
 ```text
-WebShokin → Tenpo → BizForex     (HULFT, nội bộ)
-BizForex → CBS                  (API/XML hoặc HULFT, denpyo/tanpyo)
-CBS → SWIFT Gateway             (MT103/MX, nếu là giao dịch ra quốc tế)
+WebShokin → Tenpo → BizForex     (HULFT, internal)
+BizForex → CBS                  (API/XML or HULFT, denpyo/tanpyo)
+CBS → SWIFT Gateway             (MT103/MX, for international transfers)
 ```
 
-> Điểm quan trọng: CBS không phải là điểm cuối. Nếu giao dịch là chuyển tiền quốc tế, sau CBS còn có bước gửi SWIFT message thật sự đẩy tiền ra ngân hàng nước ngoài.
+> Important point: CBS is not the end point. If the transaction is an international transfer, after CBS there's still a step sending a real SWIFT message that actually pushes the money out to the foreign bank.
 
 ---
 

@@ -4,18 +4,18 @@ title: Core Banking System — Denpyo/Tanpyo, XML Builder & COBOL Layer
 sidebar_position: 6
 ---
 
-## Denpyo và Tanpyo — chi tiết kỹ thuật
+## Denpyo and Tanpyo — technical details
 
-### Khái niệm
+### Concept
 
-| Từ Nhật | Kanji | Nghĩa | Mục đích |
+| Japanese term | Kanji | Meaning | Purpose |
 |---|---|---|---|
-| Denpyo | 伝票 | Chứng từ, voucher tổng | Đại diện 1 giao dịch tài chính hoàn chỉnh, gồm nhiều bút toán con |
-| Tanpyo | 単票 | Chứng từ đơn | Đại diện từng dòng hạch toán (debit/credit) trong denpyo |
+| Denpyo | 伝票 | Voucher, overall document | Represents one complete financial transaction, containing multiple sub-entries |
+| Tanpyo | 単票 | Single entry | Represents each individual accounting line (debit/credit) within a denpyo |
 
-1 denpyo = N tanpyo (một giao dịch có thể phát sinh 2–10 tanpyo). Không nên mặc định 1 denpyo luôn có đúng 2 tanpyo — cấu trúc phụ thuộc accounting design.
+1 denpyo = N tanpyo (a transaction may produce 2–10 tanpyo). Don't assume a denpyo always has exactly 2 tanpyo — the structure depends on the accounting design.
 
-### Ví dụ bảng dữ liệu
+### Example data table
 
 | DenpyoNo | TanpyoNo | Debit | Credit | Amount | Currency |
 |---|---|---|---|---|---|
@@ -23,9 +23,9 @@ sidebar_position: 6
 | D20251030001 | T2 | FX Gain(5310) | Revaluation(4310) | 2,000,000 | VND |
 | D20251030002 | T1 | Cash(1111) | Foreign Exchange(2110) | 200,000,000 | VND |
 
-### XML gọi CBS — Request
+### XML call to CBS — Request
 
-> **Lưu ý:** đây là ví dụ minh họa để dễ đọc (header tách thành các tag con). Format thật của HEADER khác — xem mục 11.5 (IGW, ILD/OLD) để biết cấu trúc chính xác (HEADER là chuỗi ký tự thô cố định độ dài, không phải các tag XML riêng biệt).
+> **Note:** this is an illustrative example for readability (the header is split into sub-tags). The real HEADER format is different — see the IGW/ILD/OLD section below for the exact structure (HEADER is a raw, fixed-length character string, not separate XML tags).
 
 ```xml
 <HEADER>
@@ -44,7 +44,7 @@ sidebar_position: 6
 </BODY>
 ```
 
-### XML response từ CBS
+### XML response from CBS
 
 ```xml
 <RESPONSE>
@@ -59,11 +59,11 @@ sidebar_position: 6
 </RESPONSE>
 ```
 
-Sau đó: `STATUS = Completed`, log lại thời gian ghi sổ + transaction ID từ CBS.
+After that: `STATUS = Completed`, log the posting time + transaction ID from CBS.
 
-### ⚠️ Lưu ý: thứ bậc Denpyo/Tanpyo KHÔNG thống nhất giữa các nguồn
+### ⚠️ Note: the Denpyo/Tanpyo hierarchy is NOT consistent across sources
 
-Tài liệu này (mục 10.1) mô tả **Denpyo = chứng từ tổng, Tanpyo = bút toán con** (1 Denpyo chứa N Tanpyo). Tuy nhiên có nguồn khác mô tả **ngược lại**: Tanpyo (単票) = phiếu giao dịch tổng, Denpyo (伝票) = bút toán chi tiết nợ/có cụ thể (1 Tanpyo chứa N Denpyo), với cấu trúc response:
+This document (Concept section above) describes **Denpyo = overall document, Tanpyo = sub-entries** (1 Denpyo contains N Tanpyo). However, another source describes it **the other way around**: Tanpyo (単票) = the overall transaction slip, Denpyo (伝票) = the specific detailed debit/credit entry (1 Tanpyo contains N Denpyo), with this response structure:
 
 ```xml
 <Response>
@@ -79,7 +79,7 @@ Tài liệu này (mục 10.1) mô tả **Denpyo = chứng từ tổng, Tanpyo = 
 </Response>
 ```
 
-Code parser JAXB tương ứng với cách hiểu này:
+The JAXB parser code matching this interpretation:
 
 ```java
 @XmlRootElement(name = "Response")
@@ -99,33 +99,33 @@ public class Denpyo {
 }
 ```
 
-> **Cả hai cách hiểu đều hợp lý về mặt ngôn ngữ và đều xuất hiện trong thực tế** (tùy hệ thống CBS/các core-banking vendor khác nhau cụ thể). Không có chuẩn thống nhất tuyệt đối. **Khi làm việc với một hệ thống thực tế, nên xác nhận lại quy ước của chính hệ thống đó** thay vì giả định theo 1 nguồn duy nhất — đây bản thân là điểm đáng nói khi phỏng vấn, thể hiện sự cẩn trọng thay vì khẳng định sai.
+> **Both interpretations are linguistically reasonable and both appear in practice** (depending on the specific CBS system / core-banking vendor). There is no single absolute standard. **When working with a real system, confirm that system's own convention** rather than assuming based on a single source — this itself is worth mentioning in an interview, showing carefulness rather than a wrong assertion.
 
-### Khó khăn thường gặp
+### Common difficulties
 
-| Vấn đề | Giải thích |
+| Issue | Explanation |
 |---|---|
-| Mapping XML phức tạp | Cấu trúc denpyo-tanpyo lồng nhau, cần parser chính xác |
-| Sai tỷ giá/account mapping | Bị CBS reject nếu định khoản sai |
-| Job timeout | Job batch gửi định kỳ có thể lỗi mạng, cần retry logic |
-| Phân quyền | Chỉ Manager mới chuyển status 12→10 |
-| Reconciliation | Phải đối chiếu log giữa hệ thống và CBS |
+| Complex XML mapping | Nested denpyo-tanpyo structure requires a precise parser |
+| Wrong rate/account mapping | Rejected by CBS if the entry is posted incorrectly |
+| Job timeout | Scheduled batch jobs can fail due to network issues, needs retry logic |
+| Authorization | Only a Manager can transition status 12→10 |
+| Reconciliation | Logs must be cross-checked between the system and CBS |
 
 ---
 
 
-## XML Builder động (header cố định + body theo transaction code)
+## Dynamic XML Builder (fixed header + body per transaction code)
 
-### Mô hình nghiệp vụ
+### Business model
 
-- **Header:** luôn cố định — `bankCode`, `transactionCode`, `machineNo`.
-- **Body:** cấu hình động tùy transaction type. Ví dụ `20001` dùng `<customerName>`, `20002` dùng `<customerNumber>`, `<currency>`.
-- Template body lưu trong DB, field key trừu tượng (`a1`, `a2`...) map sang tên tag XML thật.
+- **Header:** always fixed — `bankCode`, `transactionCode`, `machineNo`.
+- **Body:** configured dynamically per transaction type. E.g. `20001` uses `<customerName>`, `20002` uses `<customerNumber>`, `<currency>`.
+- The body template is stored in the DB, abstract field keys (`a1`, `a2`...) map to real XML tag names.
 
-### Các class chính
+### Main classes
 
 ```java
-// Model lưu mapping field từ DB
+// Model storing the field mapping from DB
 public class XmlTemplate {
     private String transactionCode;
     private String rootElement;
@@ -135,7 +135,7 @@ public class XmlTemplate {
 ```
 
 ```java
-// Service lấy config theo transactionCode
+// Service that fetches the config for a given transactionCode
 public class XmlTemplateService {
     public XmlTemplate getTemplateByCode(String transactionCode) {
         XmlTemplate template = new XmlTemplate();
@@ -156,7 +156,7 @@ public class XmlTemplateService {
 ```
 
 ```java
-// Helper build XML hoàn chỉnh
+// Helper that builds the full XML
 public class XmlBuilderHelper {
     public static String buildXml(String bankCode, String transactionCode, String machineNo,
             Map<String, String> dataMap, XmlTemplate template) {
@@ -185,7 +185,7 @@ public class XmlBuilderHelper {
 }
 ```
 
-### Output ví dụ
+### Example output
 
 ```xml
 <request>
@@ -201,45 +201,45 @@ public class XmlBuilderHelper {
 </request>
 ```
 
-### Ưu điểm thiết kế
+### Design advantages
 
-| Ưu điểm | Mô tả |
+| Advantage | Description |
 |---|---|
-| Tái sử dụng cao | XmlBuilderHelper dùng chung cho mọi service |
-| Dễ mở rộng | Thêm giao dịch mới chỉ cần cấu hình template DB |
-| Tách biệt nghiệp vụ & XML | Không hardcode XML trong code |
-| Tối ưu debug/log | Log được cả template + giá trị thật để trace |
+| Highly reusable | XmlBuilderHelper is shared across every service |
+| Easy to extend | Adding a new transaction only needs a DB template config |
+| Separates business logic & XML | No hardcoded XML in code |
+| Optimized for debug/log | Both the template and actual values are logged for tracing |
 
-### IGW — server trung gian, quy ước đặt tên ILD/OLD
+### IGW — the intermediary server, ILD/OLD naming convention
 
-> Bổ sung quan trọng: BizForex **không gọi thẳng CBS**. Có 1 tầng trung gian gọi là **IGW** — 1 server riêng biệt, chỉ chuyên **gom các API** lại. Bên OMT (hệ thống production thực sự xử lý giao dịch) sẽ gọi **qua IGW**, không phải BizForex gọi trực tiếp OMT/CBS.
+> Important addition: BizForex **does not call CBS directly**. There's an intermediary tier called **IGW** — a separate server whose only job is to **aggregate APIs**. The OMT side (the production system that actually processes transactions) is called **through IGW**, not directly by BizForex calling OMT/CBS.
 
-**Luồng đúng:**
+**The correct flow:**
 ```mermaid
 sequenceDiagram
     participant B as BizForex
-    participant C as IGW (server gom API)
+    participant C as IGW (API aggregation server)
     participant O as OMT (production)
-    B->>C: POST .../ILD_20001<br/>(request, tag A01/B02/C03 theo Shimusho)
+    B->>C: POST .../ILD_20001<br/>(request, tag A01/B02/C03 per Shimusho)
     C->>O: relay request
     O-->>C: response (DENPYO/TANPYO, STATUS)
     C-->>B: .../OLD_20001 (response)
 ```
 
-**Quy ước đặt tên endpoint theo transaction code:**
+**Endpoint naming convention per transaction code:**
 
 ```text
-.../ILD_20001   ← Input  Layout Data cho transaction code 20001
-.../OLD_20001   ← Output Layout Data cho transaction code 20001
+.../ILD_20001   ← Input  Layout Data for transaction code 20001
+.../OLD_20001   ← Output Layout Data for transaction code 20001
 ```
 
-- **ILD (Input Layout Data)** — định nghĩa cấu trúc **request gửi vào** cho 1 transaction code cụ thể. Bên OMT quy định field nào (ví dụ customer number, account number) map vào tag XML nào — ví dụ `customer number → A02`, `account number → B01`. Tên tag **là ký hiệu trừu tượng (A02, B01...)**, không phải tên field dễ đọc.
-- **OLD (Output Layout Data)** — tương tự nhưng cho **response trả về**, cũng dùng tag XML dạng ký hiệu trừu tượng.
-- **File 仕様書 (Shimusho — tài liệu đặc tả/spec)** — là tài liệu mẫu thiết kế dùng để tra cứu, biết chính xác **tag XML nào map với field nghiệp vụ nào** (ví dụ A02 = customer number). Không thể đoán được ý nghĩa tag chỉ nhìn vào XML, bắt buộc phải tra shimusho.
+- **ILD (Input Layout Data)** — defines the structure of the **outbound request** for a specific transaction code. OMT specifies which field (e.g. customer number, account number) maps to which XML tag — e.g. `customer number → A02`, `account number → B01`. Tag names **are abstract symbols (A02, B01...)**, not human-readable field names.
+- **OLD (Output Layout Data)** — similar, but for the **returned response**, also using abstract-symbol XML tags.
+- **仕様書 file (Shimusho — spec document)** — the design reference document used to look up exactly **which XML tag maps to which business field** (e.g. A02 = customer number). The tag's meaning can't be guessed from the XML alone — the shimusho must be consulted.
 
-> Đây chính là bằng chứng thực tế xác nhận lại đúng pattern đã note ở mục 11.1-11.4 (XML Builder với field key trừu tượng `a1, a2` map sang tag thật qua config) — chỉ khác là tag thật trong thực tế có dạng `A01, B02, C03...` (chữ cái + số) thay vì `a1, a2`, và bảng mapping này chính là **file Shimusho**, không chỉ là 1 bảng DB tự dựng như ví dụ minh họa trước.
+> This is real-world confirmation of the exact pattern noted in the Dynamic XML Builder section above (an XML Builder with abstract field keys `a1, a2` mapping to real tags via config) — the only difference is that the real tags take the form `A01, B02, C03...` (letter + number) instead of `a1, a2`, and this mapping table is precisely the **Shimusho file**, not just a self-built DB table like the earlier illustrative example.
 
-**Ví dụ cấu trúc request/response thật (khác với ví dụ minh họa ở mục 10.3 — lưu ý HEADER ở đây là chuỗi ký tự thô cố định độ dài, KHÔNG phải các tag XML con như `<BANKCODE>`/`<TRANSCODE>` đã minh họa trước):**
+**Example of the real request/response structure (different from the illustrative example above — note the HEADER here is a raw, fixed-length character string, NOT XML sub-tags like `<BANKCODE>`/`<TRANSCODE>` shown earlier):**
 
 ```xml
 <HEADER>
@@ -265,42 +265,42 @@ sequenceDiagram
 </RESPONSE>
 ```
 
-> **Lưu ý sửa lại so với mục 10.3:** ví dụ `<HEADER><BANKCODE>001</BANKCODE><TRANSCODE>20001</TRANSCODE><MACHINENO>002</MACHINENO></HEADER>` ở mục 10.3 là **minh họa để dễ đọc**, không phản ánh đúng format thật. Trong thực tế, **HEADER là 1 chuỗi ký tự thô, độ dài cố định** (kiểu fixed-length string, ví dụ `0010176002......`), giống cách encode field theo offset đã nói ở mục 2 (parse theo byte/vị trí), chứ không phải các tag con XML riêng biệt như BANKCODE/TRANSCODE. Chỉ có phần **BODY mới ở dạng tag XML** (và dùng tag trừu tượng A01/B02/C03 theo shimusho, không phải tên field dễ đọc).
+> **Correction versus the earlier example:** the example `<HEADER><BANKCODE>001</BANKCODE><TRANSCODE>20001</TRANSCODE><MACHINENO>002</MACHINENO></HEADER>` shown earlier is an **illustrative simplification for readability**, not the real format. In reality, **HEADER is a single raw, fixed-length character string** (fixed-length string style, e.g. `0010176002......`), similar to how fields are encoded by offset as described in the HULFT File Parsing chapter (parsed by byte/position), not separate XML sub-tags like BANKCODE/TRANSCODE. Only the **BODY** is in XML tag form (and uses abstract tags A01/B02/C03 per the shimusho, not readable field names).
 
-> Đây là mặt đối lập với parsing ở mục 2: một bên đọc file fixed-length vào (dùng layout DB để cắt byte), một bên build XML gửi đi (dùng template DB/shimusho để build tag) — cùng chung triết lý **data-driven, cấu hình bên ngoài code**.
+> This is the mirror image of the parsing described in the HULFT File Parsing chapter: one side reads a fixed-length file in (using a DB layout to cut bytes), the other builds outbound XML (using a DB template/shimusho to build tags) — both following the same **data-driven, configuration-outside-code** philosophy.
 
 ---
 
 
-## Bên trong tầng COBOL (kiến trúc chuẩn ngành — tham khảo, chưa xác nhận riêng cho CBS)
+## Inside the COBOL layer (industry-standard architecture — reference only, not confirmed specifically for CBS)
 
-> **Lưu ý phạm vi:** mục này mô tả kiến trúc **chuẩn ngành mainframe/COBOL** (theo tài liệu chính thức IBM CICS, Micro Focus, chuẩn COBOL2002) — áp dụng chung cho core banking kiểu Nhật, **không phải xác nhận trực tiếp cách CBS implement bên trong**. Dùng để tham khảo/hiểu bối cảnh, không nên trích dẫn như thông tin đã kiểm chứng riêng cho hệ thống Ngân hàng ABC.
+> **Scope note:** this section describes **standard mainframe/COBOL industry architecture** (per official IBM CICS, Micro Focus documentation, the COBOL2002 standard) — applicable generally to Japanese-style core banking, **not a direct confirmation of how CBS is implemented internally**. Use it as background reference, don't cite it as information verified specifically for Bank ABC's system.
 
-### Từ XML request đến COBOL program
+### From XML request to COBOL program
 
 ```mermaid
 flowchart TD
-    A["REST/XML request<br/>(từ IGW, vd .../ILD_20001)"] --> B["XML Transformation Layer<br/>(CICS Web Service hoặc tương đương)"]
-    B --> C["Convert: XML tag (A01/B02/C03...)<br/>→ COBOL data structure (COPYBOOK)<br/>mapping sinh từ XML Schema/Shimusho"]
-    C --> D["CICS tra bảng PCT<br/>(Program Control Table)<br/>transaction code → tên COBOL program"]
-    D --> E["Program chính khởi động<br/>nhận dữ liệu qua COMMAREA"]
-    E --> F["CICS LINK sang sub-program A<br/>(vd: lấy thông tin KH)"]
-    E --> G["CICS LINK sang sub-program B<br/>(vd: lấy số dư tài khoản)"]
-    F --> H["Đọc/ghi VSAM hoặc IMS DB"]
+    A["REST/XML request<br/>(from IGW, e.g. .../ILD_20001)"] --> B["XML Transformation Layer<br/>(CICS Web Service or equivalent)"]
+    B --> C["Convert: XML tag (A01/B02/C03...)<br/>→ COBOL data structure (COPYBOOK)<br/>mapping generated from XML Schema/Shimusho"]
+    C --> D["CICS looks up the PCT<br/>(Program Control Table)<br/>transaction code → COBOL program name"]
+    D --> E["Main program starts<br/>receives data via COMMAREA"]
+    E --> F["CICS LINK to sub-program A<br/>(e.g. fetch customer info)"]
+    E --> G["CICS LINK to sub-program B<br/>(e.g. fetch account balance)"]
+    F --> H["Read/write VSAM or IMS DB"]
     G --> H
-    H --> I["Kết quả gộp lại vào COMMAREA"]
-    I --> J["Program chính hoàn tất xử lý<br/>(tính toán, ghi Denpyo/Tanpyo...)"]
-    J --> K["XML Transformation Layer<br/>convert ngược: COBOL struct → XML"]
-    K --> L["Response .../OLD_20001<br/>trả về IGW"]
+    H --> I["Results merged back into COMMAREA"]
+    I --> J["Main program finishes processing<br/>(calculation, writing Denpyo/Tanpyo...)"]
+    J --> K["XML Transformation Layer<br/>converts back: COBOL struct → XML"]
+    K --> L["Response .../OLD_20001<br/>returned to IGW"]
 ```
 
-### Điểm kỹ thuật đáng chú ý
+### Notable technical points
 
-1. **COBOL program không "biết" gì về XML/REST** — chỉ làm việc với COBOL data structure (COPYBOOK). Việc "hiểu" XML là trách nhiệm của XML Transformation Layer đứng trước, nơi tag trừu tượng (A01/B02/C03) được map vào field COBOL thật theo file Shimusho (仕様書).
-2. **COMMAREA (Communication Area)** — vùng bộ nhớ dùng để truyền dữ liệu giữa các COBOL program qua lệnh `CICS LINK`, không giống REST API hiện đại (mỗi lời gọi độc lập) — đây là "sợi dây" xuyên suốt cả chuỗi program con.
-3. **1 transaction code = chuỗi nhiều program nhỏ** — mỗi program chuyên 1 việc (lấy KH, lấy số dư, ghi sổ...), khớp với việc gọi "nhiều RQ" tới CBS đã nhớ trước đó — có thể mỗi RQ tương ứng 1 nhịp LINK trong chuỗi.
-4. **VSAM/IMS DB** — nơi lưu dữ liệu thật (số dư, thông tin KH), cấu trúc phân cấp (hierarchical), khác RDBMS quan hệ — truy xuất theo key trực tiếp, nhanh nhưng kém linh hoạt hơn SQL.
-5. Toàn bộ chuỗi xử lý này nằm trong khuôn khổ **排他制御 - Acquire/Release** đã nêu ở mục 5D.3 — Acquire xảy ra trước khi vào chuỗi LINK, Release (Commit/Rollback) xảy ra sau khi toàn bộ chuỗi hoàn tất.
+1. **The COBOL program has no "awareness" of XML/REST** — it only works with COBOL data structures (COPYBOOK). "Understanding" XML is the responsibility of the XML Transformation Layer sitting in front, where abstract tags (A01/B02/C03) are mapped to real COBOL fields per the Shimusho (仕様書) file.
+2. **COMMAREA (Communication Area)** — a memory area used to pass data between COBOL programs via the `CICS LINK` command, unlike modern REST APIs (each call independent) — this is the "thread" running through the entire chain of sub-programs.
+3. **1 transaction code = a chain of several small programs** — each program handles one job (fetch customer, fetch balance, post entry...), matching the earlier-noted pattern of calling "multiple RQs" to CBS — each RQ may correspond to one LINK step in the chain.
+4. **VSAM/IMS DB** — where the real data is stored (balances, customer info), with a hierarchical structure, unlike relational RDBMS — accessed directly by key, fast but less flexible than SQL.
+5. This entire processing chain sits within the **排他制御 - Acquire/Release** framework covered in the JobNet section — Acquire happens before entering the LINK chain, Release (Commit/Rollback) happens after the whole chain completes.
 
 ---
 

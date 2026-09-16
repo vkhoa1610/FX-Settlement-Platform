@@ -6,9 +6,9 @@ sidebar_position: 2
 
 ## HULFT → DB: Fixed-length parsing (data-driven layout)
 
-### Nguyên tắc cơ bản
+### Basic principle
 
-File input từ HULFT là **fixed-length record**, ví dụ 1400 byte/record:
+Input files from HULFT are **fixed-length records**, e.g. 1400 bytes/record:
 
 ```text
 1400 bytes = 1 record
@@ -17,36 +17,36 @@ Record 2: 1400 bytes
 ...
 ```
 
-### Vì sao phải cắt theo BYTE chứ không phải String?
+### Why cut by BYTE instead of by String?
 
-Với hệ thống Nhật, encoding có thể là Shift-JIS (MS932), EUC-JP... Nếu dùng `String.substring()`, vị trí có thể sai khi một ký tự chiếm nhiều byte. Flow an toàn:
+In Japanese systems, the encoding may be Shift-JIS (MS932), EUC-JP, etc. Using `String.substring()` can land on the wrong position when a character spans multiple bytes. Safe flow:
 
 ```text
-InputStream → byte[1400] → offset/length → decode theo encoding → String → DB
+InputStream → byte[1400] → offset/length → decode per encoding → String → DB
 ```
 
-### Cách làm THỰC TẾ: layout không hardcode, quản lý qua DB
+### The REAL approach: layout isn't hardcoded — it's managed via DB
 
-Không hardcode offset trong code Java. Layout được lưu trong bảng cấu hình, khi format file đổi chỉ cần sửa DB, không cần sửa code:
+Offsets are never hardcoded in Java code. The layout is stored in a configuration table; when the file format changes, only the DB needs updating, no code changes needed:
 
-**Bảng `FILE_LAYOUT`:**
+**`FILE_LAYOUT` table:**
 
-> **Type codes đã xác nhận theo chuẩn COBOL PIC clause** (không phải ký hiệu tự đặt "N=Numeric/C=Character" như bản nháp minh họa ban đầu):
-> - **`9`** = Numeric, không dấu (PIC 9) — chỉ số dương, 1 byte/chữ số.
-> - **`S9`** = Signed Numeric, có dấu (PIC S9) — cho phép âm/dương, dùng cho field như AMOUNT (số tiền có thể cần biểu diễn điều chỉnh âm).
-> - **`X`** = Alphanumeric (PIC X) — chuỗi ký tự thường/half-width, **1 byte/ký tự**.
-> - **`N`** = National/Japanese (PIC N) — ký tự tiếng Nhật full-width (kanji/kana), **2 byte/ký tự cố định**.
+> **Type codes confirmed against the COBOL PIC clause standard** (not self-invented symbols like "N=Numeric/C=Character" as in an earlier illustrative draft):
+> - **`9`** = Numeric, unsigned (PIC 9) — positive digits only, 1 byte/digit.
+> - **`S9`** = Signed Numeric (PIC S9) — allows negative/positive, used for fields like AMOUNT (amounts that may need to represent negative adjustments).
+> - **`X`** = Alphanumeric (PIC X) — regular/half-width character string, **1 byte/character**.
+> - **`N`** = National/Japanese (PIC N) — full-width Japanese characters (kanji/kana), **fixed 2 bytes/character**.
 
 | FIELD_NAME | START_POS | LENGTH | TYPE | DESCRIPTION |
 |---|---|---|---|---|
-| SEQ_NO | 1 | 5 | 9 | Số thứ tự (không dấu) |
-| ACCOUNT_NO | 6 | 12 | X | Số tài khoản |
-| AMOUNT | 18 | 10 | S9 | Số tiền (có dấu — có thể âm khi điều chỉnh/Nợ-Có) |
-| CURRENCY | 28 | 3 | X | Mã tiền tệ |
-| DATE | 31 | 8 | X | Ngày giao dịch (yyyymmdd) |
-| CUSTOMER_NAME | 39 | 40 | N | Tên khách hàng (full-width, 2 byte/ký tự → 40 byte = tối đa 20 ký tự kanji) |
+| SEQ_NO | 1 | 5 | 9 | Sequence number (unsigned) |
+| ACCOUNT_NO | 6 | 12 | X | Account number |
+| AMOUNT | 18 | 10 | S9 | Amount (signed — can be negative for adjustments/Debit-Credit) |
+| CURRENCY | 28 | 3 | X | Currency code |
+| DATE | 31 | 8 | X | Transaction date (yyyymmdd) |
+| CUSTOMER_NAME | 39 | 40 | N | Customer name (full-width, 2 bytes/char → 40 bytes = max 20 kanji characters) |
 
-**Parser động đọc layout từ DB:**
+**Dynamic parser that reads the layout from DB:**
 
 ```java
 public class HulftFileParser {
@@ -65,7 +65,7 @@ public class HulftFileParser {
         return records;
     }
 
-    // Cắt chuỗi theo byte — quan trọng khi file có ký tự đa byte (SJIS)
+    // Cut string by byte — important when the file contains multi-byte characters (SJIS)
     private String substringByByte(String str, int start, int length) throws UnsupportedEncodingException {
         byte[] bytes = str.getBytes("MS932");
         byte[] sub = Arrays.copyOfRange(bytes, start, start + length);
@@ -74,27 +74,27 @@ public class HulftFileParser {
 }
 ```
 
-**Lợi ích của thiết kế data-driven:**
-- Format file đổi → chỉ update DB, không sửa code.
-- Reuse layout cho nhiều loại file (FX_TRX, DENPYO, TANPYO...).
-- Mapping layout theo loại giao dịch (`FILE_TYPE` hoặc `SYUNO_BC` trong CBS).
+**Benefits of the data-driven design:**
+- File format changes → only update the DB, no code changes.
+- Reuse the layout across multiple file types (FX_TRX, DENPYO, TANPYO...).
+- Layout mapping per transaction type (`FILE_TYPE` or `SYUNO_BC` in CBS).
 
-> **Nguyên tắc thiết kế xuyên suốt hệ thống**: cấu hình trong DB, không hardcode trong code — áp dụng cả cho chiều đọc file vào (layout parsing) lẫn chiều build XML gửi đi (xem mục 8).
+> **Design principle that runs through the whole system**: configuration lives in the DB, not hardcoded in code — applied both to reading files in (layout parsing) and building outbound XML (see the Core Banking System chapter).
 
-> **Lưu ý về encoding:** khi field chỉ chứa mã số/ký tự Latin (record type, branch code, account no...), có thể decode bằng UTF-8 mà không lỗi. Nhưng khi field có khả năng chứa ký tự tiếng Nhật (tên khách hàng, ghi chú...), **bắt buộc dùng Shift-JIS/MS932** như đã nêu ở mục 2.2 — không nên mặc định UTF-8 cho toàn bộ file chỉ vì một vài field số không lỗi.
+> **Encoding note:** when a field only contains numeric/Latin characters (record type, branch code, account no...), UTF-8 decoding may work without errors. But when a field can contain Japanese characters (customer name, remarks...), **Shift-JIS/MS932 is mandatory** as noted above — don't default to UTF-8 for the whole file just because a few numeric fields happen not to error.
 
-### Ví dụ layout thứ hai (minh họa thêm)
+### Second layout example (additional illustration)
 
-| Byte Range | Field Name | Length | Type | Ghi chú |
+| Byte Range | Field Name | Length | Type | Note |
 |---|---|---|---|---|
 | 0-3 | Record Type | 4 | X | `"FEXR"` |
-| 4-13 | Branch Code | 10 | X | Mã chi nhánh |
-| 14-33 | Account No | 20 | X | Số tài khoản |
+| 4-13 | Branch Code | 10 | X | Branch code |
+| 14-33 | Account No | 20 | X | Account number |
 | 34-53 | Currency | 20 | X | USD, JPY... |
 
-> Type codes theo chuẩn COBOL PIC đã xác nhận ở mục 2.3 (`9`/`S9`/`X`/`N`) — ví dụ này chỉ dùng field dạng chuỗi thường (`X`, half-width), không có field tiếng Nhật.
+> Type codes follow the confirmed COBOL PIC standard (`9`/`S9`/`X`/`N`) — this example only uses regular string fields (`X`, half-width), no Japanese fields.
 
-Cấu trúc package thường gặp cho loại hệ thống này: `common/` (parse layout, convert binary) — `batch/` (import/export job) — `service/` (gọi API) — `view/` (cho user xử lý) — `report/` (in PDF/CSV).
+Typical package structure for this kind of system: `common/` (parse layout, convert binary) — `batch/` (import/export job) — `service/` (call API) — `view/` (for user processing) — `report/` (print PDF/CSV).
 
 ---
 

@@ -4,122 +4,123 @@ title: BizForex — Exchange, FX Gain/Loss & Rate
 sidebar_position: 5
 ---
 
-## 為替取引 (Kawase Torihiki) và vị trí của 送金 (Remittance) bên trong
+## 為替取引 (Kawase Torihiki) and where 送金 (Remittance) sits within it
 
-> **Đã kiểm chứng qua 2 nguồn pháp lý độc lập** (án lệ Tòa án Tối cao Nhật + giáo trình 詳解銀行法, và tạp chí nghiệp vụ ngân hàng khki.co.jp) — đây KHÔNG phải 2 phạm trù song song như bản nháp ban đầu từng mô tả, mà là quan hệ **bao trùm / loại con**.
+> **Verified against 2 independent legal sources** (a Japanese Supreme Court precedent + the 詳解銀行法 textbook, and the banking-operations journal khki.co.jp) — this is NOT two parallel categories as an earlier draft once described, but rather a **containing / sub-type** relationship.
 
-### Cấu trúc pháp lý chuẩn (đã xác nhận)
+### Standard legal structure (confirmed)
 
-**為替取引 (Kawase Torihiki)** là khái niệm pháp lý bao trùm — 1 trong 3 nghiệp vụ cốt lõi của ngân hàng theo Luật Ngân hàng Nhật (nhận tiền gửi, cho vay, và 為替取引/kawase). Bên trong nó có **4 nhóm con**:
+**為替取引 (Kawase Torihiki)** is the overarching legal concept — one of the 3 core banking operations under Japan's Banking Act (taking deposits, lending, and 為替取引/kawase). Inside it there are **4 sub-groups**:
 
 ```text
-為替取引 (Exchange — nghĩa pháp lý rộng)
-├── ① 送金 (Soukin — Remittance)        ví dụ: 普通送金, 国庫送金
-├── ② 振込 (Furikomi — Chuyển khoản)     ví dụ: 振込, 国庫金振込
-├── ③ 代金取立 (Daikin Toritate — Thu hộ) ví dụ: 代金取立
-└── ④ 雑為替 (Zatsu-kawase — Khác)       ví dụ: 付替, 請求
+為替取引 (Exchange — broad legal meaning)
+├── ① 送金 (Soukin — Remittance)        e.g.: 普通送金, 国庫送金
+├── ② 振込 (Furikomi — Transfer)         e.g.: 振込, 国庫金振込
+├── ③ 代金取立 (Daikin Toritate — Collection) e.g.: 代金取立
+└── ④ 雑為替 (Zatsu-kawase — Other)       e.g.: 付替, 請求
 ```
 
-`送金 (Remittance)` **là 1 trong 4 loại con** nằm trong 為替取引, không phải khái niệm ngang hàng/song song với nó.
+`送金 (Remittance)` **is one of the 4 sub-types** inside 為替取引, not a concept parallel/equal to it.
 
-### Cách hệ thống thực tế tổ chức trên màn hình (UI logic)
+### How the real system organizes it on screen (UI logic)
 
-Dù về mặt pháp lý 送金 nằm trong 為替取引, nhưng **trên màn hình nghiệp vụ thực tế (BizForex), hệ thống tách 送金取引 thành field tổng riêng biệt**, dùng "為替取引" trên UI theo **nghĩa hẹp hơn** (chỉ gộp 3 nhóm còn lại: 振込/代金取立/雑為替) — vì 送金 thường có khối lượng lớn, logic phí/xử lý quốc tế (SWIFT) khác biệt, nên tách riêng cho dễ quản lý:
+Although legally 送金 sits inside 為替取引, on the **actual business screen (BizForex), the system splits 送金取引 out into its own separate total field**, using "為替取引" on the UI in a **narrower sense** (only covering the other 3 groups: 振込/代金取立/雑為替) — because 送金 typically has a large volume and different fee/international-processing (SWIFT) logic, so it's separated out for easier management:
 
 ```text
-Màn hình Receipt có 10 category con (thuộc 4 nhóm pháp lý ở trên)
+The Receipt screen has 10 sub-categories (belonging to the 4 legal groups above)
         │
-        ▼ User chọn 1 trong 10 category
+        ▼ User selects 1 of the 10 categories
         │
    ┌────┴────────────────────────┐
-   │  Category thuộc nhóm 送金?   │
+   │  Does the category belong    │
+   │  to the 送金 group?          │
    └────┬───────────────────┬────┘
-       Có                   Không
+       Yes                  No
         │                    │
         ▼                    ▼
 ┌───────────────┐    ┌───────────────┐
 │ 送金取引 field │    │ 為替取引 field │
-│ (tổng tiền)    │    │ (tổng tiền)    │
+│ (total amount) │    │ (total amount) │
 └───────────────┘    └───────────────┘
         │                    │
         └─────────┬──────────┘
                    ▼
-        Khi Kanryo: hệ thống check số tiền
-        ở field tương ứng (送金取引 hoặc 為替取引)
-        + tổng lại 10 fee bên dưới 1 lần nữa
-        để đối chiếu (double-check trước khi commit)
+        On Kanryo: the system checks the amount
+        in the corresponding field (送金取引 or 為替取引)
+        + re-sums the 10 fees below once more
+        for cross-checking (double-check before commit)
 ```
 
-> **Lưu ý quan trọng:** đây là cách tổ chức UI thực dụng của hệ thống cụ thể, không mâu thuẫn với luật — chỉ là "為替取引" trên màn hình đang được dùng với phạm vi hẹp hơn (loại trừ 送金 vì đã có field riêng), khác với nghĩa pháp lý đầy đủ (bao gồm cả 送金) đã nêu ở mục 7.1. Khi trao đổi với người khác về hệ thống, nên làm rõ đang nói "為替取引 theo nghĩa luật" hay "為替取引 theo field trên màn hình" để tránh nhầm lẫn.
+> **Important note:** this is a pragmatic UI organization choice of a specific system, and doesn't contradict the law — it's just that "為替取引" on the screen is used with a narrower scope (excluding 送金 since it has its own field), different from the full legal meaning (including 送金) covered above. When discussing the system with others, it's worth clarifying whether you mean "為替取引 in the legal sense" or "為替取引 as the on-screen field" to avoid confusion.
 
-### Ví dụ bút toán minh họa (mang tính khái niệm)
+### Illustrative journal entry example (conceptual)
 
-- Remittance (送金): `外貨預金 (Debit) / 当座預金 (Credit)` — phản ánh dòng tiền chuyển thật.
-- Các loại còn lại trong 為替取引 (振込/代金取立/雑為替): tùy loại mà bút toán khác nhau, đều là hạch toán ghi nhận dòng tiền/nghĩa vụ tài chính tương ứng, không phải "không có dòng tiền thực" như bản nháp cũ từng mô tả — vì cả 4 nhóm đều là 為替取引 hợp pháp, chỉ khác về hình thức/kênh xử lý.
+- Remittance (送金): `外貨預金 (Debit) / 当座預金 (Credit)` — reflects a real money transfer.
+- The remaining types within 為替取引 (振込/代金取立/雑為替): journal entries vary by type, but all record a corresponding cash flow/financial obligation — not "no real cash flow" as an earlier draft once described, since all 4 groups are legally valid 為替取引, differing only in form/processing channel.
 
-### Mã Kamoku (科目) — nội tệ vs ngoại tệ (đã xác nhận từ kinh nghiệm thực tế)
+### Kamoku code (科目) — local vs. foreign currency (confirmed from real-world experience)
 
-Song song với 4 nhóm giao dịch ở trên, tài khoản còn được phân loại theo mã **科目 (Kamoku)**. Chuẩn quốc gia (Zengin) dùng **1 chữ số**:
+Alongside the 4 transaction groups above, accounts are also classified by a **科目 (Kamoku)** code. The national standard (Zengin) uses **1 digit**:
 
 ```text
-1 = 普通 (Futsuu — tài khoản thường)
-2 = 当座 (Touza — tài khoản vãng lai)
-4 = 定期 (Teiki — tiền gửi có kỳ hạn)
-9 = その他 (Sonota — khác)
+1 = 普通 (Futsuu — ordinary account)
+2 = 当座 (Touza — current account)
+4 = 定期 (Teiki — time deposit)
+9 = その他 (Sonota — other)
 ```
 
-Hệ thống WebShoukin/BizForex mở rộng thành **2 chữ số**, ghép thêm 1 chữ số domain phía trước (không phải chuẩn quốc gia công khai, đây là quy ước nội bộ nhưng có logic kế thừa từ chuẩn Zengin):
+The WebShoukin/BizForex system extends this to **2 digits**, prefixing an extra domain digit (not a public national standard — this is an internal convention, but one with logic inherited from the Zengin standard):
 
 ```text
-11 = Nội tệ + 普通 (Futsuu)     — WebShoukin (cũ) chỉ hỗ trợ 2 mã này
-12 = Nội tệ + 当座 (Touza)
-31 = Ngoại tệ + 普通 (Futsuu)   — BizForex mở rộng thêm 2 mã này
-32 = Ngoại tệ + 当座 (Touza)
+11 = Local currency + 普通 (Futsuu)     — WebShoukin (legacy) only supports these 2 codes
+12 = Local currency + 当座 (Touza)
+31 = Foreign currency + 普通 (Futsuu)   — BizForex adds these 2 more codes
+32 = Foreign currency + 当座 (Touza)
 ```
 
-→ Chữ số thứ 2 (1=普通, 2=当座) giữ đúng chuẩn Zengin quốc gia; chữ số đầu (1=nội tệ, 3=ngoại tệ) là quy ước riêng để phân biệt domain — cách mở rộng có logic kế thừa, không phải hệ mã hoàn toàn mới.
+→ The 2nd digit (1=普通, 2=当座) exactly follows the national Zengin standard; the 1st digit (1=local, 3=foreign) is a proprietary convention to distinguish domain — an extension with inherited logic, not a completely new coding scheme.
 
 ---
 
 
 ## FX Gain/Loss — Customer Rate vs Accounting Rate
 
-### Hai thời điểm xử lý, hai tỷ giá
+### Two processing points, two rates
 
-| Thời điểm | Hệ thống | Tỷ giá | Ý nghĩa |
+| Point in time | System | Rate | Meaning |
 |---|---|---|---|
-| T1 | WebShokin | 28,000 | Khách hàng mua USD (customer rate) |
-| T2 | BizForex | 27,000 | Kế toán ghi sổ (accounting/book rate) |
+| T1 | WebShokin | 28,000 | Customer buys USD (customer rate) |
+| T2 | BizForex | 27,000 | Accounting posts the entry (accounting/book rate) |
 
-### Ví dụ số cụ thể
-
-```text
-Customer rate = 28,000 → khách trả 10,000 × 28,000 = 280,000,000 JPY
-Accounting rate = 27,000 → hệ thống ghi sổ 10,000 × 27,000 = 270,000,000 JPY
-→ Chênh lệch = 10,000,000 JPY = FX Gain (為替差益) của ngân hàng
-```
-
-Nếu accounting rate CAO hơn customer rate → ngân hàng ghi **為替差損 (FX Loss)**.
-
-### Ba bút toán (tanpyo) khi có chênh lệch rate
+### Concrete numeric example
 
 ```text
-a) Giao dịch gốc:      Cash JPY / Foreign Deposit USD    280,000,000
-b) Giao dịch kế toán:  Foreign Deposit USD / Cash JPY    270,000,000
-c) FX Gain/Loss entry: Cash JPY / 為替差益 (FX Gain)       10,000,000
+Customer rate = 28,000 → customer pays 10,000 × 28,000 = 280,000,000 JPY
+Accounting rate = 27,000 → the system books 10,000 × 27,000 = 270,000,000 JPY
+→ Difference = 10,000,000 JPY = FX Gain (為替差益) for the bank
 ```
 
-### Vì sao có chênh lệch này
+If the accounting rate is HIGHER than the customer rate → the bank records **為替差損 (FX Loss)**.
 
-- WebShokin dùng **customer rate** (TTS + margin) — giá bán cho khách.
-- BizForex/Treasury cập nhật **daily TTS, TTB** từ ngân hàng trung ương mỗi ngày, dùng làm accounting rate.
-- Chênh lệch giữa 2 rate = spread/lợi nhuận hoặc rủi ro tỷ giá của ngân hàng.
+### Three journal entries (tanpyo) when there's a rate difference
 
-### Database fields liên quan
+```text
+a) Original transaction:   Cash JPY / Foreign Deposit USD    280,000,000
+b) Accounting transaction: Foreign Deposit USD / Cash JPY    270,000,000
+c) FX Gain/Loss entry:     Cash JPY / 為替差益 (FX Gain)       10,000,000
+```
+
+### Why this difference exists
+
+- WebShokin uses the **customer rate** (TTS + margin) — the sell price to the customer.
+- BizForex/Treasury update **daily TTS, TTB** from the central bank each day, used as the accounting rate.
+- The difference between the two rates = the bank's spread/profit or FX risk.
+
+### Related database fields
 
 ```text
 FX_TRANSACTION: amount_usd, customer_rate, accounting_rate, fx_gain_loss, status
-FX_RATE_MST:    tts_rate (rate hiện hành theo ngày)
+FX_RATE_MST:    tts_rate (current rate by day)
 FX_DENPYO:      denpyo_no
 FX_TANPYO:      type = GAIN/LOSS
 ```
@@ -129,46 +130,46 @@ FX_TANPYO:      type = GAIN/LOSS
 
 ## Historical Rate vs Current Rate + Revaluation
 
-### Khái niệm
+### Concept
 
-| Thuật ngữ | Giải thích |
+| Term | Explanation |
 |---|---|
-| Current rate (現行レート) | Tỷ giá hiện tại do ngân hàng công bố, thay đổi hằng ngày/theo phiên. Dùng cho giao dịch mới. |
-| Historical rate (履歴レート) | Tỷ giá đã áp dụng tại thời điểm giao dịch gốc. Dùng khi reprocess, hoàn tiền, revaluation, hủy giao dịch. |
+| Current rate (現行レート) | The current rate published by the bank, changing daily/per session. Used for new transactions. |
+| Historical rate (履歴レート) | The rate applied at the time of the original transaction. Used for reprocessing, refunds, revaluation, transaction cancellation. |
 
-**Khác biệt với mục 8:** mục 8 nói về 2 rate tại **cùng một thời điểm** (customer thấy gì vs kế toán ghi gì); mục này nói về rate theo **trục thời gian** (rate hôm nay khác rate lúc giao dịch gốc do độ trễ xử lý).
+**Difference from the FX Gain/Loss section:** that section is about 2 rates at the **same point in time** (what the customer sees vs. what accounting books); this section is about rate along a **time axis** (today's rate differs from the rate at the original transaction due to processing lag).
 
-### Vì sao cần lưu cả hai
+### Why both must be stored
 
-**Giao dịch có độ trễ:** khách mua USD ngày 01/10 (rate 24,000), nhưng hệ thống kế toán xử lý ngày 03/10 lúc rate đã đổi thành 24,100 → nếu không lưu historical rate sẽ tính sai giá trị sổ sách.
+**Transactions have a lag:** a customer buys USD on 01/10 (rate 24,000), but the accounting system processes it on 03/10 when the rate has changed to 24,100 → without storing the historical rate, the book value would be calculated incorrectly.
 
-**Revaluation (đánh giá lại) cuối tháng:**
+**End-of-month revaluation:**
 ```text
-Revaluation = (Current Rate - Historical Rate) × Số dư ngoại tệ
-Ví dụ: (24,200 - 24,000) × 10,000 = 2,000,000 VND (FX gain)
+Revaluation = (Current Rate - Historical Rate) × Foreign currency balance
+Example: (24,200 - 24,000) × 10,000 = 2,000,000 VND (FX gain)
 ```
 
-### Bảng DB quản lý
+### DB tables that manage this
 
-| Table | Mục đích |
+| Table | Purpose |
 |---|---|
-| FX_RATE_MST | Lưu tỷ giá hiện hành theo ngày (TTS, TTB, TTN) |
-| FX_RATE_HIS | Lưu tỷ giá đã sử dụng trong từng giao dịch |
-| FX_TRANSACTION | Có field FX_RATE_ID trỏ tới FX_RATE_HIS |
+| FX_RATE_MST | Stores the current rate by day (TTS, TTB, TTN) |
+| FX_RATE_HIS | Stores the rate used in each transaction |
+| FX_TRANSACTION | Has an FX_RATE_ID field pointing to FX_RATE_HIS |
 
-### Logic xác định rate dùng theo trường hợp
+### Logic for which rate to use, by case
 
-| Trường hợp | Tỷ giá dùng |
+| Case | Rate used |
 |---|---|
-| Giao dịch mới trong ngày | Current rate |
-| Giao dịch chuyển tiếp qua ngày | Historical rate của ngày phát sinh |
-| Revaluation cuối tháng | So sánh Historical vs Current |
-| Hủy giao dịch | Historical rate gốc |
+| New transaction, same day | Current rate |
+| Transaction carried over to the next day | Historical rate from the origination day |
+| End-of-month revaluation | Compare Historical vs Current |
+| Transaction cancellation | Original historical rate |
 
-### Code minh họa
+### Illustrative code
 
 ```java
-// Lấy tỷ giá hiện tại và lưu vào transaction
+// Fetch the current rate and store it into the transaction
 FxRate currentRate = fxRateRepo.findByDate(LocalDate.now());
 FxTransaction tx = new FxTransaction();
 tx.setAmount(10000);
@@ -177,7 +178,7 @@ tx.setFxRate(currentRate.getTts());
 tx.setFxRateDate(LocalDate.now());
 fxTransactionRepo.save(tx);
 
-// Khi revaluation cuối tháng
+// At end-of-month revaluation
 BigDecimal revalRate = fxRateRepo.findByDate(monthEnd).getTts();
 BigDecimal fxGainLoss = tx.getAmount()
     .multiply(revalRate.subtract(tx.getFxRate()));
